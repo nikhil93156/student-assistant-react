@@ -5,6 +5,7 @@ import { useStudent } from '../context/StudentContext';
 // Initialize Google GenAI client
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 const MODEL_NAME = "gemini-2.5-flash";
+const ALLOWED_STREAMS = ['Science', 'Commerce', 'Arts']; // Defined once for both functions
 
 const Chatbot = ({ initialQuestion }) => {
   const { studentData, activeStreamData } = useStudent();
@@ -14,20 +15,27 @@ const Chatbot = ({ initialQuestion }) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // --- API Communication Function ---
-  // ... inside src/components/Chatbot.jsx
-
+  // --- API Communication Function (Contains System Instructions) ---
   const sendToGemini = useCallback(async (textToSend, history) => {
     setIsLoading(true);
 
-    const systemInstruction =
-      `***MANDATORY ROLE***: You are solely a **BRUTALLY HONEST, expert 10th-grade Career Counselor**. You only provide guidance related to **Career Paths, Educational Streams, Subject Choice, or Top Educational Institutions**.
+    const streamContext = activeStreamData?.context || 
+                          "You are a general 10th-grade academic assistant. Be accurate and honest.";
+
+    // *** FINAL, MOST RESTRICTIVE SYSTEM INSTRUCTION ***
+    const systemInstruction = 
+        `***MANDATORY ROLE***: You are solely a **BRUTALLY HONEST, expert 10th-grade Career Counselor**. 
+        
+        **YOUR ENTIRE KNOWLEDGE BASE IS RESTRICTED TO THESE THREE STREAMS: ${ALLOWED_STREAMS.join(', ')}.**
+        
+        You only provide guidance related to **Career Paths, Educational Streams, Subject Choice, or Top Educational Institutions** that fall under one of those three domains.
         
         **CRITICAL STYLE CONSTRAINT**: You must maintain a strictly professional, formal, and analytical tone. **You are absolutely forbidden from using humor, jokes, emojis, greetings, or conversational filler phrases.** Your responses must be direct, factual, and focused only on the career/education query.
         
-        **CRITICAL FAILURE MODE**: If a user asks ANY question about entertainment, jokes, general knowledge, or other non-career topics, you **MUST** immediately stop and respond with: "My role is strictly limited to career and academic guidance. I cannot discuss that topic."
+        **CRITICAL FAILURE MODE**: If a user asks a question outside of the scope of ${ALLOWED_STREAMS.join(', ')} (e.g., entertainment, general knowledge, or other non-career topics), you **MUST** immediately stop and respond with: "My role is strictly limited to guidance within the Science, Commerce, and Arts streams. I cannot discuss that topic."
         
         **Base Context**: ${streamContext} Your core personality is brutally honest, truth-speaking, and highly knowledgeable. You must never lie or give misleading information. The student's name is ${studentData?.name || 'Student'} and their focus subject is ${studentData?.focusSubject || 'general studies'}.`;
+    // ************************************************************
 
 
     const apiMessages = history.map(msg => ({
@@ -73,14 +81,14 @@ const Chatbot = ({ initialQuestion }) => {
     const userMessageText = textToSend.trim();
     const lowerText = userMessageText.toLowerCase();
 
-    // --- 🚨 CLIENT-SIDE INPUT BLOCK: PREVENTS OFF-TOPIC API CALLS ---
-    const offTopicPattern = /movie|film|list|joke|ranking|top\s*\d+|celebrity|dating|love|crush|anxiety|feel\s*bad|personal\s*problem|capital\s*of|define\s*|who\s*is|what\s*is\s*the\s*best|how\s*to\s*make/;
+    const offTopicPattern = /movie|film|joke|list|ranking|top\s*\d+|celebrity|dating|love|crush|anxiety|feel\s*bad|personal\s*problem|capital\s*of|define\s*|who\s*is|what\s*is\s*the\s*best|how\s*to\s*make/;
 
-    if (offTopicPattern.test(lowerText)) {
+    if (offTopicPattern.test(lowerText) || !ALLOWED_STREAMS.some(s => lowerText.includes(s.toLowerCase())) && !lowerText.includes('career')) {
+      
       // Internal rejection message—guaranteed delivery and no API cost
       const blockMessage = {
         id: Date.now() + 0.5,
-        text: "My programmed role is strictly to provide career and academic guidance. I am unable to discuss entertainment, general knowledge, or personal topics. Please ask me a question about your educational future, stream choice, or career path.",
+        text: `My role is strictly limited to guidance within the ${ALLOWED_STREAMS.join(', ')} streams. I cannot discuss that topic.`,
         sender: 'model'
       };
 
@@ -136,7 +144,7 @@ const Chatbot = ({ initialQuestion }) => {
           <div className="flex-grow p-4 space-y-4 overflow-y-auto">
             {messages.length === 0 && (
               <div className="text-center text-gray-500 italic">
-                👋 Ask a question about your 10th-grade topics!
+                👋 Ask a question about your 10th-grade stream options!
               </div>
             )}
             {messages.map((msg) => (

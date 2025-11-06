@@ -1,8 +1,4 @@
-// src/data/subjectData.js
 
-/**
- * Data structure containing streams, focus subjects, and pre-defined Guidance FAQs.
- */
 export const STREAM_DATA = {
   // --- SCIENCE STREAM ---
   Science: {
